@@ -146,11 +146,49 @@ class ContactPasswords extends BaseContactPasswords {
 	 * @param string $password
 	 * @return boolean
 	 */
+	/**
+	 * Value to store in contact_passwords.password for a new history entry.
+	 * Uses password_hash() once upgrade_password_storage.php has widened the column;
+	 * until then it keeps the old reversible format so nothing gets truncated.
+	 *
+	 * @param string $password
+	 * @param integer $timestamp password date, only used by the legacy format
+	 * @return string
+	 */
+	static function hashForHistory($password, $timestamp){
+		if (Contact::passwordHashColumnExists()) {
+			return password_hash((string) $password, PASSWORD_DEFAULT);
+		}
+		return cp_encrypt($password, $timestamp);
+	}
+
+	/**
+	 * @param string $stored
+	 * @return boolean true if $stored was made by password_hash()
+	 */
+	static function isHashedHistoryEntry($stored){
+		$info = password_get_info((string) $stored);
+		return !empty($info['algo']);
+	}
+
+	/**
+	 * @param ContactPassword $contact_pass
+	 * @param string $password
+	 * @return boolean
+	 */
+	static function historyEntryMatches($contact_pass, $password){
+		$stored = $contact_pass->getPassword();
+		if (self::isHashedHistoryEntry($stored)) {
+			return password_verify((string) $password, $stored);
+		}
+		return cp_decrypt($stored, $contact_pass->getPasswordDate()->getTimestamp()) == $password;
+	}
+
 	static function validateAgainstPasswordHistory($contact_id, $password){
 		if(config_option('validate_password_history', 0) == 1){
 			$passwords = self::getLastTenContactPasswords($contact_id);
 			foreach($passwords as $contact_pass){
-				if(cp_decrypt($contact_pass->getPassword(), $contact_pass->getPasswordDate()->getTimestamp()) == $password){
+				if(self::historyEntryMatches($contact_pass, $password)){
 					return false;
 				}
 			}
@@ -170,6 +208,9 @@ class ContactPasswords extends BaseContactPasswords {
 		if(config_option('new_password_char_difference', 0) == 1){
 			$passwords = self::getLastTenContactPasswords($contact_id);
 			foreach($passwords as $contact_pass){
+				// Hashed entries can't be compared character by character, so this rule
+				// only applies to legacy entries that haven't been converted yet.
+				if (self::isHashedHistoryEntry($contact_pass->getPassword())) continue;
 				$storedPass = cp_decrypt($contact_pass->getPassword(), $contact_pass->getPasswordDate()->getTimestamp());
 				$differences = abs(strlen($storedPass) - strlen($password));
 				$minLength = min(array(strlen($storedPass), strlen($password)));
