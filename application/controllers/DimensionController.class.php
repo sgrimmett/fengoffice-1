@@ -365,6 +365,9 @@ class DimensionController extends ApplicationController {
 		$return_all_members = false;
 		
 		$selected_member_ids = json_decode(array_var($_REQUEST, 'selected_ids', "[0]"));
+		// only numeric ids may reach the SQL below
+		$selected_member_ids = is_array($selected_member_ids) ? array_map('intval', $selected_member_ids) : array();
+		if (count($selected_member_ids) == 0) $selected_member_ids = array(0);
 		$selected_members = Members::instance()->findAll(array('conditions' => 'id IN ('.implode(',',$selected_member_ids).')'));
 		
 		$limit_obj = array(
@@ -418,6 +421,9 @@ class DimensionController extends ApplicationController {
 		$return_all_members = false;
 		
 		$selected_member_ids = json_decode(array_var($_REQUEST, 'selected_ids', "[0]"));
+		// only numeric ids may reach the SQL below
+		$selected_member_ids = is_array($selected_member_ids) ? array_map('intval', $selected_member_ids) : array();
+		if (count($selected_member_ids) == 0) $selected_member_ids = array(0);
 		$selected_members = Members::instance()->findAll(array('conditions' => 'id IN ('.implode(',',$selected_member_ids).')'));
 		
 		$limit_obj = array();
@@ -478,6 +484,9 @@ class DimensionController extends ApplicationController {
 		$return_all_members = false;
 	
 		$selected_member_ids = json_decode(array_var($_REQUEST, 'selected_ids', "[0]"));
+		// only numeric ids may reach the SQL below
+		$selected_member_ids = is_array($selected_member_ids) ? array_map('intval', $selected_member_ids) : array();
+		if (count($selected_member_ids) == 0) $selected_member_ids = array(0);
 		$selected_members = Members::instance()->findAll(array('conditions' => 'id IN ('.implode(',',$selected_member_ids).')'));
 		
 		Hook::fire('list_dimension_members_tree_modify_member_filter', array('dimension' => $dimension), $selected_members);
@@ -826,7 +835,7 @@ class DimensionController extends ApplicationController {
 					$selected_member_ids_csv = array_var($_REQUEST, 'selected_member_ids');
 					if ($selected_member_ids_csv != "") {
 						$selected_members = array();
-						$selected_member_ids = array_filter(explode(",", $selected_member_ids_csv));
+						$selected_member_ids = array_filter(array_map('intval', explode(",", $selected_member_ids_csv)));
 						if (count($selected_member_ids) > 0) {
 							$selected_members = Members::instance()->findAll(array("conditions"=>"id IN (".implode(',', $selected_member_ids).")"));
 						}
@@ -1327,16 +1336,20 @@ class DimensionController extends ApplicationController {
 			} else {
 				$ot_cond = "";
 			}
+			$pg_id = (int) array_var($_REQUEST, 'pg', -1);
 			if (array_var($_REQUEST, 'only_with_perm')) {
-				$extra_cond .= " AND EXISTS (SELECT cmp.member_id FROM ".TABLE_PREFIX."contact_member_permissions cmp WHERE cmp.member_id=id AND cmp.permission_group_id=".array_var($_REQUEST, 'pg', '-1')." $ot_cond)";
+				$extra_cond .= " AND EXISTS (SELECT cmp.member_id FROM ".TABLE_PREFIX."contact_member_permissions cmp WHERE cmp.member_id=id AND cmp.permission_group_id=".$pg_id." $ot_cond)";
 			} else if (array_var($_REQUEST, 'only_without_perm')) {
-				$extra_cond .= " AND NOT EXISTS (SELECT cmp.member_id FROM ".TABLE_PREFIX."contact_member_permissions cmp WHERE cmp.member_id=id AND cmp.permission_group_id=".array_var($_REQUEST, 'pg', '-1')." $ot_cond)";
+				$extra_cond .= " AND NOT EXISTS (SELECT cmp.member_id FROM ".TABLE_PREFIX."contact_member_permissions cmp WHERE cmp.member_id=id AND cmp.permission_group_id=".$pg_id." $ot_cond)";
 			}
 		}
 		
 		$return_all_members = false;
 	
 		$selected_member_ids = json_decode(array_var($_REQUEST, 'selected_ids', "[0]"));
+		// only numeric ids may reach the SQL below
+		$selected_member_ids = is_array($selected_member_ids) ? array_map('intval', $selected_member_ids) : array();
+		if (count($selected_member_ids) == 0) $selected_member_ids = array(0);
 		$selected_members = Members::instance()->findAll(array('conditions' => 'id IN ('.implode(',',$selected_member_ids).')'));
 		
 		$limit_obj = array(

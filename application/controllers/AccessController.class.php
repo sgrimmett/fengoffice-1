@@ -201,7 +201,7 @@ class AccessController extends ApplicationController {
 					$user_password = new ContactPassword();
 					$user_password->setContactId($user->getId());
 					$user_password->setPasswordDate(DateTimeValueLib::now());
-					$user_password->setPassword(cp_encrypt($password, $user_password->getPasswordDate()->getTimestamp()));
+					$user_password->setPassword(ContactPasswords::hashForHistory($password, $user_password->getPasswordDate()->getTimestamp()));
 					$user_password->password_temp = $password;
 					$user_password->save();
 				}else{
@@ -405,7 +405,7 @@ class AccessController extends ApplicationController {
 			$user_password = new ContactPassword();
 			$user_password->setPasswordDate(DateTimeValueLib::now());
 			$user_password->setContactId($user->getId());
-			$user_password->setPassword(cp_encrypt($new_password, $user_password->getPasswordDate()->getTimestamp()));
+			$user_password->setPassword(ContactPasswords::hashForHistory($new_password, $user_password->getPasswordDate()->getTimestamp()));
 			$user_password->password_temp = $new_password;
 			$user_password->save();
 			
@@ -621,7 +621,7 @@ class AccessController extends ApplicationController {
 				$user_password->setContactId($administrator->getId());
 				$user_password->password_temp = $admin_password;
 				$user_password->setPasswordDate(DateTimeValueLib::now());
-				$user_password->setPassword(cp_encrypt($admin_password, $user_password->getPasswordDate()->getTimestamp()));
+				$user_password->setPassword(ContactPasswords::hashForHistory($admin_password, $user_password->getPasswordDate()->getTimestamp()));
 				$user_password->save();
 				
 				//Add email after save because is needed. 
@@ -886,7 +886,7 @@ class AccessController extends ApplicationController {
 				$user_password->setContactId($user->getId());
 				$user_password->password_temp = $new_password;
 				$user_password->setPasswordDate(DateTimeValueLib::now());
-				$user_password->setPassword(cp_encrypt($new_password, $user_password->getPasswordDate()->getTimestamp()));
+				$user_password->setPassword(ContactPasswords::hashForHistory($new_password, $user_password->getPasswordDate()->getTimestamp()));
 				$user_password->save();
 		
 				$user->setPassword($new_password);
