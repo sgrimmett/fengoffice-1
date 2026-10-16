@@ -323,6 +323,7 @@ CREATE TABLE `<?php echo $table_prefix ?>contacts` (
   `user_type` smallint unsigned NOT NULL default '0',
   `is_active_user` tinyint(1) unsigned NOT NULL default '0',
   `token` varchar(40) <?php echo $default_collation ?> NOT NULL default '',
+  `password_hash` varchar(255) <?php echo $default_collation ?> NULL default NULL,
   `salt` varchar(13) <?php echo $default_collation ?> NOT NULL default '',
   `twister` varchar(10) <?php echo $default_collation ?> NOT NULL default '',
   `display_name` varchar(50) <?php echo $default_collation ?> default NULL,
@@ -914,7 +915,7 @@ ENGINE = <?php echo $engine ?>;
 CREATE TABLE `<?php echo $table_prefix ?>contact_passwords` (
   `id` int(10) NOT NULL AUTO_INCREMENT,
   `contact_id` int(10) NOT NULL,
-  `password` varchar(40) NOT NULL,
+  `password` varchar(255) NOT NULL,
   `password_date` datetime NOT NULL,
   PRIMARY KEY (`id`),
   UNIQUE KEY `id` (`id`)
