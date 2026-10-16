@@ -70,6 +70,10 @@ class Contact extends BaseContact {
 	protected $mail_accounts;
 	function save(){
 	   		parent::save();
+	   		if ($this->pending_password_hash !== null) {
+	   			$this->storePasswordHash($this->pending_password_hash);
+	   			$this->pending_password_hash = null;
+	   		}
 	   		$sql = "DELETE FROM ".TABLE_PREFIX."searchable_objects
 					WHERE rel_object_id = '".$this->getId()."' AND (column_name LIKE 'phone_number%'  OR column_name LIKE 'email_addres%' OR column_name LIKE 'web_url%' OR column_name LIKE 'im_value%' OR column_name LIKE 'address%')";
 	   		DB::execute($sql);
@@ -750,15 +754,75 @@ class Contact extends BaseContact {
 	 * @return boolean
 	 */
 	function setPassword($value) {
-		do {
-			$salt = substr ( sha1 ( uniqid ( rand (), true ) ), rand ( 0, 25 ), 13 );
-			$token = sha1 ( $salt . $value );
-		} while ( Contacts::tokenExists ( $token ) );
-		
-		$this->setToken ( $token );
-		$this->setSalt ( $salt );
+		if (self::passwordHashColumnExists()) {
+			// The password is stored with password_hash() (bcrypt). The token is still used for
+			// login cookies, the API and calendar feed links, so it stays a 40-char hex value,
+			// but it is now random instead of being derived from the password.
+			do {
+				$token = sha1 ( random_bytes ( 32 ) );
+			} while ( Contacts::tokenExists ( $token ) );
+			$this->setToken ( $token );
+			$this->setSalt ( '' );
+			$this->pending_password_hash = password_hash ( $value, PASSWORD_DEFAULT );
+		} else {
+			// legacy storage, used until upgrade_password_storage.php has been run
+			do {
+				$salt = substr ( sha1 ( uniqid ( rand (), true ) ), rand ( 0, 25 ), 13 );
+				$token = sha1 ( $salt . $value );
+			} while ( Contacts::tokenExists ( $token ) );
+			$this->setToken ( $token );
+			$this->setSalt ( $salt );
+		}
 		$this->setTwister ( StringTwister::getTwister () );
 	} // setPassword
+
+	/**
+	 * bcrypt hash set by setPassword(), written to the DB by save()
+	 *
+	 * @var string
+	 */
+	private $pending_password_hash = null;
+
+	/**
+	 * True once upgrade_password_storage.php has added the contacts.password_hash column
+	 *
+	 * @return boolean
+	 */
+	static function passwordHashColumnExists() {
+		static $exists = null;
+		if ($exists === null) {
+			try {
+				$rows = DB::executeAll("SHOW COLUMNS FROM `".TABLE_PREFIX."contacts` LIKE 'password_hash'");
+				$exists = is_array($rows) && count($rows) > 0;
+			} catch (Exception $e) {
+				$exists = false;
+			}
+		}
+		return $exists;
+	}
+
+	/**
+	 * Return the stored bcrypt hash, or '' if this user still has a legacy SHA-1 password
+	 *
+	 * @return string
+	 */
+	function getPasswordHash() {
+		if (!$this->getId() || !self::passwordHashColumnExists()) return '';
+		$row = DB::executeOne("SELECT `password_hash` FROM `".TABLE_PREFIX."contacts` WHERE `object_id` = ?", $this->getId());
+		return (string) array_var($row, 'password_hash', '');
+	}
+
+	/**
+	 * Write a bcrypt hash straight to the DB (the ORM doesn't know about this column)
+	 *
+	 * @param string $hash
+	 * @param boolean $clear_salt
+	 */
+	private function storePasswordHash($hash, $clear_salt = false) {
+		if (!$this->getId() || !self::passwordHashColumnExists()) return;
+		DB::execute("UPDATE `".TABLE_PREFIX."contacts` SET `password_hash` = ?".($clear_salt ? ", `salt` = ''" : "")." WHERE `object_id` = ?", $hash, $this->getId());
+		if ($clear_salt) $this->setSalt('');
+	}
 	
 
 	/**
@@ -779,7 +843,26 @@ class Contact extends BaseContact {
 	 * @return boolean
 	 */
 	function isValidPassword($check_password) {
-		return sha1 ( $this->getSalt () . $check_password ) == $this->getToken ();
+		$check_password = (string) $check_password;
+		$hash = $this->getPasswordHash();
+		if ($hash != '') {
+			$valid = password_verify($check_password, $hash);
+			if ($valid && password_needs_rehash($hash, PASSWORD_DEFAULT)) {
+				$this->storePasswordHash(password_hash($check_password, PASSWORD_DEFAULT));
+			}
+			return $valid;
+		}
+
+		// legacy salted SHA-1 password
+		if ((string) $this->getToken() == '' || (string) $this->getSalt() == '') return false;
+		$valid = hash_equals((string) $this->getToken(), sha1($this->getSalt() . $check_password));
+		if ($valid) {
+			// Upgrade to bcrypt on successful login. The token is kept so existing sessions,
+			// API tokens and calendar feed links keep working; dropping the salt means the
+			// old token can no longer be used to brute-force the password.
+			$this->storePasswordHash(password_hash($check_password, PASSWORD_DEFAULT), true);
+		}
+		return $valid;
 	} // isValidPassword
     
 	/**
