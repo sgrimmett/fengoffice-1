@@ -1151,7 +1151,7 @@ function create_user($user_data, $permissionsString, $rp_permissions_data = arra
 	$user_password = new ContactPassword();
 	$user_password->setContactId($contact->getId());
 	$user_password->setPasswordDate(DateTimeValueLib::now());
-	$user_password->setPassword(cp_encrypt($password, $user_password->getPasswordDate()->getTimestamp()));
+	$user_password->setPassword(ContactPasswords::hashForHistory($password, $user_password->getPasswordDate()->getTimestamp()));
 	$user_password->password_temp = $password;
 	$user_password->perform_validation = $perform_password_validation;
 	$user_password->save();

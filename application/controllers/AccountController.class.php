@@ -221,7 +221,7 @@ class AccountController extends ApplicationController {
 				$user_password->setContactId(get_id());
 				$user_password->password_temp = $new_password;
 				$user_password->setPasswordDate(DateTimeValueLib::now());
-				$user_password->setPassword(cp_encrypt($new_password, $user_password->getPasswordDate()->getTimestamp()));
+				$user_password->setPassword(ContactPasswords::hashForHistory($new_password, $user_password->getPasswordDate()->getTimestamp()));
 				$user_password->save();
 
 				$user->setPassword($new_password);

@@ -436,7 +436,7 @@ $all_user_groups = PermissionGroups::instance()->getUserGroupsInfo();
 						$(".user-data").show();
 					<?php } ?>
 					<?php if (isset($_POST['widget_user_type'])) { ?>
-						$('[name="contact[user][type]"]').val(<?php echo $_POST['widget_user_type'] ?>);
+						$('[name="contact[user][type]"]').val(<?php echo json_encode((string)$_POST['widget_user_type'], JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?>);
 					<?php } ?>
 
 					og.checkEmailAddress("#<?php echo $genid ?>profileFormEmail", '<?php echo $contact->getId(); ?>', '<?php echo $genid ?>', 'contact');

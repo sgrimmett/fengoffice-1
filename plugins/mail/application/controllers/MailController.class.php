@@ -1438,24 +1438,29 @@ class MailController extends ApplicationController {
 				}
 
 				if (array_var($attach, 'FileName') == 'winmail.dat') {
-                    file_put_contents('tmp/attachment.dat', $attach["Data"]);
-					chdir(ROOT . '/tmp/');
+					// Extract into a folder of its own for this email, so concurrent requests
+					// can't overwrite each other's files, and never chdir() the whole request.
+					$winmail_dir = self::getWinmailTmpDir($email);
+					if (!is_dir($winmail_dir)) @mkdir($winmail_dir, 0700, true);
+					$dat_path = $winmail_dir . '/attachment.dat';
+					file_put_contents($dat_path, $attach["Data"]);
 
 					//Get the name of the file.
-					$cmd = TNEF_LIBRARY . " attachment.dat --list";
-					$result = "";
+					$cmd = TNEF_LIBRARY . " --list " . escapeshellarg($dat_path);
+					$result = array();
 					$return_var = 0;
 					exec($cmd, $result, $return_var);
-					$file_name_extracted = strtok($result[0], '|');
+					$file_name_extracted = basename((string) strtok((string) array_var($result, 0, ''), '|'));
 
 					//Extract it from .dat to the original value
-					$cmd = TNEF_LIBRARY . " attachment.dat --overwrite";
-					$result = "";
+					$cmd = TNEF_LIBRARY . " --overwrite -C " . escapeshellarg($winmail_dir) . " " . escapeshellarg($dat_path);
+					$result = array();
 					$return_var = 0;
 					exec($cmd, $result, $return_var);
+					@unlink($dat_path);
 					$attach['FileName'] = $file_name_extracted;
 					$winmailDat = 1;
-                }
+				}
 
 				// if attachment is an email add the email attachments to the view
 				if (array_var($attach, 'Type') == 'message') {
@@ -1643,6 +1648,10 @@ class MailController extends ApplicationController {
 	function download_attachment() {
 		$emailId = array_var($_GET, 'email_id');
 		$email = MailContents::instance()->findById($emailId);
+		if (!$email instanceof MailContent || !$email->canView(logged_user())) {
+			header('HTTP/1.0 404 Not Found');
+			die();
+		}
 		$attId = array_var($_GET, 'attachment_id');
 		$attachFileGet = array_var($_GET, 'fileAttachName');
 		$winmailtype = array_var($_GET, 'winmailtype');
@@ -1738,8 +1747,13 @@ class MailController extends ApplicationController {
 		$inline = false;
 
 		if ($winmailtype == '1') {
-			$file_att_name = $attachFileGet;
-			$file_url = ROOT . '/tmp/' . $file_att_name;
+			// Only serve files extracted from this email's winmail.dat; basename() blocks "../" paths.
+			$winmail_dir = realpath(self::getWinmailTmpDir($email));
+			$file_url = $winmail_dir ? realpath($winmail_dir . '/' . basename((string) $attachFileGet)) : false;
+			if (!$file_url || strpos($file_url, $winmail_dir . DIRECTORY_SEPARATOR) !== 0 || !is_file($file_url)) {
+				header('HTTP/1.0 404 Not Found');
+				die();
+			}
 			header('Content-Type: application/octet-stream');
 			header("Content-Transfer-Encoding: Binary"); 
 			header("Content-disposition: attachment; filename=\"" . basename($file_url) . "\""); 
@@ -1750,6 +1764,13 @@ class MailController extends ApplicationController {
 		download_contents($content, $typeString, $filename, $filesize, !$inline);
 		die();
 	} // download_file
+
+	/**
+	 * Temp folder where the files inside an email's winmail.dat are extracted
+	 */
+	private static function getWinmailTmpDir($email) {
+		return ROOT . '/tmp/winmail_' . (int) $email->getId();
+	}
 
 	/**
 	 * Unclassify specific email

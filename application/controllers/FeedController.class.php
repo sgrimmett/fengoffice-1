@@ -158,12 +158,14 @@ class FeedController extends PageController {
 		$token = $_GET['t'];
 		$cal = $_GET['cal'];
 		if (Contacts::tokenExists($token)) {
-			$user = Contacts::instance()->findOne(array('conditions' => "token='$token'"));
-			
+			$user = Contacts::instance()->findOne(array('conditions' => array('`token` = ?', $token)));
+
 			$conditions = " AND EXISTS (SELECT i.contact_id FROM ".TABLE_PREFIX."event_invitations i WHERE i.event_id=e.object_id AND  i.contact_id=".$user->getId().")";
-			
-			if (array_var($_GET, 'cal') != "") {
-				$mem_cond = "e.object_id IN (SELECT object_id FROM ".TABLE_PREFIX."object_members WHERE member_id IN (".array_var($_GET, 'cal')."))";
+
+			// 'cal' comes from the feed URL: only accept a comma-separated list of numeric member ids
+			$cal_ids = array_filter(array_map('intval', explode(',', (string)$cal)));
+			if (count($cal_ids) > 0) {
+				$mem_cond = "e.object_id IN (SELECT object_id FROM ".TABLE_PREFIX."object_members WHERE member_id IN (".implode(',', $cal_ids)."))";
 			} else {
 				$mem_cond = "true";
 			}
